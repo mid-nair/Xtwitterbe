@@ -43,7 +43,13 @@ export const env = {
   },
 
   cors: {
-    origins: optional('CORS_ORIGINS', 'http://localhost:5173').split(','),
+    origins: optional(
+      'CORS_ORIGINS',
+      'http://localhost:5173,https://xtwiterfe.vercel.app',
+    )
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   },
 
   cloudinary: {
