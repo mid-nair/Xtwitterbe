@@ -50,6 +50,7 @@ export const env = {
   port: parseInt(optional('PORT', '4000'), 10),
   nodeEnv: optional('NODE_ENV', 'development'),
   isDev: optional('NODE_ENV', 'development') === 'development',
+  frontendUrl: optional('FRONTEND_URL', 'https://xtwiterfe.vercel.app'),
 
   jwt: {
     secret: required('JWT_SECRET'),

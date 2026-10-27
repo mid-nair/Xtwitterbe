@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import { env } from '@/config/env';
 import { validate } from '@/middleware/validate.middleware';
 import { loginSchema, registerSchema } from './auth.dto';
 import { loginHandler, registerHandler } from './auth.controller';
@@ -18,16 +18,13 @@ router.post('/login', validate(loginSchema), loginHandler);
  */
 router.post('/register', validate(registerSchema), registerHandler);
 
-// Browsers open URLs with GET. Auth endpoints are POST-only, so return a clear
-// 405 instead of Express's default "Cannot GET" 404.
-router.get('/login', methodNotAllowed);
-router.get('/register', methodNotAllowed);
-
-function methodNotAllowed(_req: Request, res: Response): void {
-  res
-    .set('Allow', 'POST')
-    .status(405)
-    .json({ message: 'Method Not Allowed. Send a POST request with a JSON body.' });
-}
+// Browsers open URLs with GET. Redirect humans to the frontend auth pages;
+// API clients must use POST with a JSON body.
+router.get('/login', (_req, res) => {
+  res.redirect(`${env.frontendUrl}/login`);
+});
+router.get('/register', (_req, res) => {
+  res.redirect(`${env.frontendUrl}/register`);
+});
 
 export default router;
