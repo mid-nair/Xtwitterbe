@@ -10,6 +10,18 @@ import { env } from '@/config/env';
  * - AppError (operational) → structured JSON response with the correct status code
  * - Unknown errors         → 500 with stack trace in dev, generic message in prod
  */
+/**
+ * Errors raised when the database cannot be reached (Atlas IP allowlist,
+ * network outage, cluster paused, etc.). These surface after a long server
+ * selection timeout, so report them as 503 without leaking connection details.
+ */
+function isDatabaseConnectionError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /Server selection timeout|No available servers|Can't reach database server|received fatal alert|P1001/i.test(
+    message,
+  );
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
@@ -27,6 +39,23 @@ export function errorHandler(
         ? 'Image must be 5MB or smaller.'
         : 'Image upload failed.';
     res.status(400).json({ message });
+    return;
+  }
+
+  if (isDatabaseConnectionError(err)) {
+    console.error('[DatabaseConnectionError]', err instanceof Error ? err.message : err);
+    res.status(503).json({
+      message: 'Database is unavailable right now. Please try again in a moment.',
+    });
+    return;
+  }
+
+  if (
+    err instanceof SyntaxError &&
+    'status' in err &&
+    (err as { status?: number }).status === 400
+  ) {
+    res.status(400).json({ message: 'Invalid JSON body.' });
     return;
   }
 
