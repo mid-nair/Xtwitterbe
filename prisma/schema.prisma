@@ -1,0 +1,223 @@
+// =============================================================================
+// Prisma schema for the Twitter clone backend
+// Database: MongoDB
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Users
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  username      String   @unique
+  display_name  String
+  email         String   @unique
+  password_hash String
+  bio           String   @default("")
+  avatar_url    String   @default("")
+  banner_url    String   @default("")
+  location      String   @default("")
+  website_url   String   @default("")
+  is_verified   Boolean  @default(false)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tweets    Tweet[]    @relation("UserTweets")
+  likes     Like[]     @relation("UserLikes")
+  reposts   Repost[]   @relation("UserReposts")
+  bookmarks Bookmark[] @relation("UserBookmarks")
+  // Users who follow this user (rows where this user is the target).
+  followers Follow[]   @relation("FollowTarget")
+  // Users this user follows (rows where this user is the actor).
+  following Follow[]   @relation("FollowActor")
+
+  notifications_received Notification[] @relation("NotificationRecipient")
+  notifications_sent     Notification[] @relation("NotificationActor")
+  sent_messages          Message[]      @relation("MessageSender")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tweets
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Tweet {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  content           String
+  author_id         String   @db.ObjectId
+  reply_to_tweet_id String?  @db.ObjectId
+  quote_tweet_id    String?  @db.ObjectId
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  author    User         @relation("UserTweets", fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  media     TweetMedia[]
+  likes     Like[]       @relation("TweetLikes")
+  reposts   Repost[]     @relation("TweetReposts")
+  bookmarks Bookmark[]   @relation("TweetBookmarks")
+  replies   Tweet[]      @relation("TweetReplies")
+  reply_to  Tweet?       @relation("TweetReplies", fields: [reply_to_tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  notifications Notification[]
+
+  @@index([author_id])
+  @@index([reply_to_tweet_id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tweet Media
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TweetMedia {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  tweet_id   String @db.ObjectId
+  url        String
+  media_type String @default("image")
+
+  tweet Tweet @relation(fields: [tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tweet_id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engagement: Likes
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Like {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String   @db.ObjectId
+  tweet_id   String   @db.ObjectId
+  created_at DateTime @default(now())
+
+  user  User  @relation("UserLikes", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tweet Tweet @relation("TweetLikes", fields: [tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, tweet_id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engagement: Reposts
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Repost {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String   @db.ObjectId
+  tweet_id   String   @db.ObjectId
+  created_at DateTime @default(now())
+
+  user  User  @relation("UserReposts", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tweet Tweet @relation("TweetReposts", fields: [tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, tweet_id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engagement: Bookmarks
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Bookmark {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String   @db.ObjectId
+  tweet_id   String   @db.ObjectId
+  created_at DateTime @default(now())
+
+  user  User  @relation("UserBookmarks", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tweet Tweet @relation("TweetBookmarks", fields: [tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, tweet_id])
+  @@index([user_id, created_at(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Social graph: Follows
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Follow {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  follower_id  String   @db.ObjectId
+  following_id String   @db.ObjectId
+  created_at   DateTime @default(now())
+
+  follower  User @relation("FollowActor", fields: [follower_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  following User @relation("FollowTarget", fields: [following_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([follower_id, following_id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trending topics
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Trend {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  category   String
+  topic      String   @unique
+  post_count Int      @default(0)
+  updated_at DateTime @updatedAt
+}
+
+// =============================================================================
+// Notifications
+// =============================================================================
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  REPLY
+  REPOST
+  MENTION
+}
+
+model Notification {
+  id           String           @id @default(auto()) @map("_id") @db.ObjectId
+  recipient_id String           @db.ObjectId
+  actor_id     String           @db.ObjectId
+  type         NotificationType
+  tweet_id     String?          @db.ObjectId
+  read_at      DateTime?
+  created_at   DateTime         @default(now())
+
+  recipient User  @relation("NotificationRecipient", fields: [recipient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor     User  @relation("NotificationActor", fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tweet     Tweet? @relation(fields: [tweet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([recipient_id, created_at(sort: Desc)])
+  @@index([tweet_id])
+}
+
+// =============================================================================
+// Direct messages
+// =============================================================================
+
+model Conversation {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  participant_ids String[]  @db.ObjectId
+  created_at      DateTime  @default(now())
+  last_message_at DateTime  @default(now())
+
+  messages Message[]
+
+  @@index([participant_ids])
+}
+
+model Message {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversation_id String    @db.ObjectId
+  sender_id       String    @db.ObjectId
+  content         String
+  created_at      DateTime  @default(now())
+  read_at         DateTime?
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sender       User         @relation("MessageSender", fields: [sender_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([conversation_id, created_at(sort: Desc)])
+  @@index([sender_id])
+}

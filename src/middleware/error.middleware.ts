@@ -1,0 +1,45 @@
+import type { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import { AppError } from '@/shared/errors/AppError';
+import { env } from '@/config/env';
+
+/**
+ * Global error-handling middleware.
+ * Must be registered LAST (after all routes) in the Express app.
+ *
+ * - AppError (operational) → structured JSON response with the correct status code
+ * - Unknown errors         → 500 with stack trace in dev, generic message in prod
+ */
+export function errorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  _next: NextFunction,
+): void {
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({ message: err.message });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? 'Image must be 5MB or smaller.'
+        : 'Image upload failed.';
+    res.status(400).json({ message });
+    return;
+  }
+
+  // Unexpected / programming error
+  const message = env.isDev && err instanceof Error ? err.message : 'Internal server error.';
+  if (env.isDev) console.error('[UnhandledError]', err);
+
+  res.status(500).json({ message });
+}
+
+/**
+ * 404 fallback — registered after all routes but before errorHandler.
+ */
+export function notFoundHandler(req: Request, _res: Response, next: NextFunction): void {
+  next(AppError.notFound(`Cannot ${req.method} ${req.originalUrl}`));
+}
