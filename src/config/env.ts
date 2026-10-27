@@ -32,6 +32,20 @@ function parseCloudinaryUrl(value: string) {
 
 const cloudinaryUrl = parseCloudinaryUrl(optional('CLOUDINARY_URL', ''));
 
+const configuredCorsOrigins = optional(
+  'CORS_ORIGINS',
+  'http://localhost:5173,https://xtwiterfe.vercel.app',
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+// Always allow the deployed frontend, even if CORS_ORIGINS is overridden
+// in the hosting dashboard.
+const corsOrigins = Array.from(
+  new Set([...configuredCorsOrigins, 'https://xtwiterfe.vercel.app']),
+);
+
 export const env = {
   port: parseInt(optional('PORT', '4000'), 10),
   nodeEnv: optional('NODE_ENV', 'development'),
@@ -43,13 +57,7 @@ export const env = {
   },
 
   cors: {
-    origins: optional(
-      'CORS_ORIGINS',
-      'http://localhost:5173,https://xtwiterfe.vercel.app',
-    )
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    origins: corsOrigins,
   },
 
   cloudinary: {
