@@ -4,3 +4,6 @@ dist/
 *.db-journal
 *.log
 .env
+
+# Personal birthday photos/videos used by prisma/seed-birthday.ts (never commit these)
+prisma/birthday-media/
