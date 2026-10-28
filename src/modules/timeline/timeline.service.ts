@@ -33,8 +33,9 @@ export async function getFollowingTimeline(viewerId: string, cursor?: string) {
   });
   const followingIds = follows.map((f) => f.following_id);
 
+  // Following nobody means an empty Following feed (not the global feed).
   if (followingIds.length === 0) {
-    return getForYouTimeline(viewerId, cursor);
+    return { data: [], next_cursor: null };
   }
 
   const tweets = await prisma.tweet.findMany({

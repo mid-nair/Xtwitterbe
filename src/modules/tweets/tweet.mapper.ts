@@ -60,14 +60,18 @@ export function formatTweet(tweet: TweetWithRelations) {
     reply_to_tweet_id: tweet.reply_to_tweet_id ?? null,
     reply_to_user: tweet.reply_to
       ? {
-          id: tweet.reply_to.author.id,
-          username: tweet.reply_to.author.username,
-          display_name: tweet.reply_to.author.display_name,
-          avatar_url: tweet.reply_to.author.avatar_url,
-          is_verified: tweet.reply_to.author.is_verified,
-        }
+        id: tweet.reply_to.author.id,
+        username: tweet.reply_to.author.username,
+        display_name: tweet.reply_to.author.display_name,
+        avatar_url: tweet.reply_to.author.avatar_url,
+        is_verified: tweet.reply_to.author.is_verified,
+      }
       : null,
     media_urls: tweet.media.map((m) => m.url),
+    media: tweet.media.map((m) => ({
+      url: m.url,
+      type: m.media_type === 'video' ? ('video' as const) : ('image' as const),
+    })),
     stats: {
       likes: tweet._count.likes,
       reposts: tweet._count.reposts,
