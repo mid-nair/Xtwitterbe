@@ -197,7 +197,7 @@ function checkMediaFiles(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing media files in prisma/birthday-media/: ${missing.join(', ')}\n` +
-      'Unzip birthday-media.zip into prisma/birthday-media/ and try again.',
+        'Unzip birthday-media.zip into prisma/birthday-media/ and try again.',
     );
   }
 }
@@ -268,6 +268,7 @@ interface PostSpec {
   media?: string[]; // media keys, e.g. "story-01", "video-rooftop"
   agoMin: number; // minutes before the script runs
   replyTo?: string; // key of the parent post
+  long?: boolean; // allowed to exceed 280 characters (the friends' letters)
 }
 
 const HER_U = HER.username;
@@ -477,12 +478,6 @@ const posts: PostSpec[] = [
     text: 'ONE YEAR AGO TODAY: your 24th birthday grid. Nothing has changed except you now have your own website. 😌🎂',
   },
   {
-    key: 'neha_wish',
-    author: 'neha_xo',
-    agoMin: 5 * HOUR,
-    text: 'Happy 25th @vaishanavi 🎂 you are the main character AND the plot twist. Love you!!',
-  },
-  {
     key: 'c_sleeping',
     author: C,
     agoMin: 4 * HOUR,
@@ -547,8 +542,6 @@ const posts: PostSpec[] = [
   },
 
   // ── Replies on the main post ──────────────────────────────────────────────
-  { key: 'r_neha', author: 'neha_xo', replyTo: 'main', agoMin: 10 * MIN, text: 'Happy birthday to the only person who can manifest a parking spot AND a plot twist. 🔮🎂' },
-  { key: 'r_brinda', author: 'brinda_b', replyTo: 'main', agoMin: 10 * MIN - 1, text: 'Turning 25 with a law degree, rank 2 and the best sense of humour I know. Love you!! 🎓💜' },
   { key: 'r_samiksha', author: 'samiksha_s', replyTo: 'main', agoMin: 9 * MIN, text: 'May your chai be hot and your JD stay forever. Happy birthday!! 🍀☕' },
   { key: 'r_shandeepa', author: 'shandeepa', replyTo: 'main', agoMin: 9 * MIN - 1, text: 'Eat the cake, skip the stress. Sudarshan Kriya can wait one day. Happy birthday!! 😂🧘‍♀️' },
   { key: 'r_akarsha', author: 'akarsha_', replyTo: 'main', agoMin: 8 * MIN, text: 'May your playlist be 90% NCT Dream and 10% Hanuman Chalisa today. Happy birthday! 🎧🛕' },
@@ -557,7 +550,6 @@ const posts: PostSpec[] = [
   { key: 'r_bhavitha', author: 'bhavitha_', replyTo: 'main', agoMin: 6 * MIN, text: 'Happy birthday to my favourite brainrot supplier. 🧠💜 Never change.' },
   { key: 'r_savitha', author: 'savii', replyTo: 'main', agoMin: 6 * MIN - 1, text: 'Pretty, funny and impossible to dislike. Happy birthday! (Still the cutest in every dump.) 😍' },
   { key: 'r_rudra', author: 'rudra_r', replyTo: 'main', agoMin: 5 * MIN, text: 'Please accept this very formal birthday wish from a very casual friend. Many happy returns! 🎉' },
-  { key: 'r_akshay', author: 'akshay_a', replyTo: 'main', agoMin: 5 * MIN - 1, text: 'May all your manifestations arrive on time (and the Wi-Fi too). Happy birthday! 📶🎂' },
   { key: 'r_dm', author: 'daily_manifest', replyTo: 'main', agoMin: 4 * MIN, text: 'Affirmation of the day: you are 25 and the universe RSVP\'d yes. ✨' },
   { key: 'r_at', author: 'astro_tarot', replyTo: 'main', agoMin: 4 * MIN - 1, text: 'Scorpio season is fully activated. Mercury says: eat cake before 6pm. ♏🔮' },
   { key: 'r_bb', author: 'boardroom_buzz', replyTo: 'main', agoMin: 3 * MIN, text: 'BREAKING: birthday girl valuation up 25% year on year. Analysts recommend: buy her a gift. 📈' },
@@ -568,9 +560,7 @@ const posts: PostSpec[] = [
   { key: 'r_hy', author: 'hydrate_or_diedrate', replyTo: 'main', agoMin: 1 * MIN, text: 'Birthday reminder: drink a glass of water between slices. 💧' },
 
   // ── Replies on her own posts ──────────────────────────────────────────────
-  { key: 'rg_brinda', author: 'brinda_b', replyTo: 'her_grad', agoMin: 2 * DAY + 5 * HOUR, text: 'Rank 2 and still no ego. Iconic. 🎓' },
   { key: 'rg_rudra', author: 'rudra_r', replyTo: 'her_grad', agoMin: 2 * DAY + 4 * HOUR, text: 'Counsel for the vibes, sorted. ⚖️' },
-  { key: 'rr_neha', author: 'neha_xo', replyTo: 'her_roof', agoMin: 3 * DAY + 20 * HOUR, text: 'The spin cycle! Do it again at the party. 💃' },
   { key: 'rs_pooja', author: 'pooja_p', replyTo: 'her_squad', agoMin: 2 * DAY - 30, text: 'The dog is judging us again 😭' },
   { key: 'rd_savitha', author: 'savii', replyTo: 'her_dump2', agoMin: 1 * DAY - 40, text: 'Pretty!! 😍 (I stand by it.)' },
 ];
@@ -584,7 +574,6 @@ const likeSpec: Record<string, string[] | 'FRIENDS' | 'PARODY' | 'EVERYONE'> = {
   main: 'EVERYONE',
   c_sleeping: 'FRIENDS',
   c_yearago: 'FRIENDS',
-  neha_wish: ['brinda_b', 'savii', 'pooja_p', 'rudra_r', C],
   jd_bday: ['neha_xo', 'brinda_b', 'bhavitha_', 'savii'],
   at_bday: ['pooja_p', 'neha_xo', 'savii'],
   bb_bday: ['rudra_r', 'akshay_a', 'brinda_b'],
@@ -633,7 +622,7 @@ interface NotificationSpec {
 /** Notifications that land in HER notification tab. */
 const herNotifications: NotificationSpec[] = [
   { actor: C, type: 'MENTION', tweetKey: 'main', agoMin: 12 },
-  ...['r_neha', 'r_brinda', 'r_samiksha', 'r_shandeepa', 'r_akarsha', 'r_pooja', 'r_pranava', 'r_bhavitha', 'r_savitha', 'r_rudra', 'r_akshay'].map(
+  ...['r_samiksha', 'r_shandeepa', 'r_akarsha', 'r_pooja', 'r_pranava', 'r_bhavitha', 'r_savitha', 'r_rudra'].map(
     (key, index): NotificationSpec => ({
       actor: posts.find((p) => p.key === key)!.author,
       type: 'REPLY',
@@ -688,6 +677,50 @@ const trends = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Letters from friends (kept in a private, git-ignored file)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface LetterSpec {
+  username: string;
+  text: string;
+}
+
+/**
+ * The friends' real, personal messages live in prisma/birthday-media/letters.json
+ * so they never end up in a public GitHub repo:
+ *   [ { "username": "neha_xo", "text": "..." }, ... ]
+ * Each one becomes a top-level post from that friend, and the Letters page in the
+ * app shows them as sealed envelopes.
+ */
+function loadLetters(): LetterSpec[] {
+  const file = path.join(MEDIA_DIR, 'letters.json');
+  if (!fs.existsSync(file)) {
+    throw new Error(
+      'Missing prisma/birthday-media/letters.json. Unzip birthday-media.zip (or birthday-letters.zip) into prisma/ and try again.',
+    );
+  }
+
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!Array.isArray(parsed)) throw new Error('letters.json must be a list of { username, text } objects.');
+
+  return parsed.map((item, index) => {
+    const letter = item as Partial<LetterSpec>;
+    if (typeof letter.username !== 'string' || typeof letter.text !== 'string' || !letter.text.trim()) {
+      throw new Error(`letters.json item #${index + 1} needs a "username" and a "text".`);
+    }
+    return { username: letter.username, text: letter.text };
+  });
+}
+
+function addLetterPosts(): void {
+  loadLetters().forEach((letter, index) => {
+    const key = `letter_${letter.username}`;
+    posts.push({ key, author: letter.username, agoMin: 300 - index * 20, text: letter.text, long: true });
+    likeSpec[key] = 'FRIENDS';
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Validation (also what --dry-run prints)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -702,7 +735,7 @@ function validateContent(): void {
     if (keys.has(post.key)) throw new Error(`Duplicate post key: ${post.key}`);
     keys.add(post.key);
     if (!usernames.has(post.author)) throw new Error(`Unknown author "${post.author}" in ${post.key}`);
-    if (post.text.length > 280) throw new Error(`Post ${post.key} is ${post.text.length} chars (max 280)`);
+    if (!post.long && post.text.length > 280) throw new Error(`Post ${post.key} is ${post.text.length} chars (max 280)`);
     if (post.replyTo && !seen.has(post.replyTo)) {
       throw new Error(`Reply ${post.key} must come after its parent ${post.replyTo}`);
     }
@@ -848,6 +881,7 @@ async function cleanup(ids: string[]): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  addLetterPosts();
   validateContent();
   checkMediaFiles();
 
@@ -862,7 +896,7 @@ async function main(): Promise<void> {
     if (herTweets > 0 && !FORCE) {
       console.log(
         `@${HER.username} already has ${herTweets} posts, so the birthday content looks seeded already.\n` +
-        'Run with --force to rebuild it (this only removes content owned by the birthday accounts).',
+          'Run with --force to rebuild it (this only removes content owned by the birthday accounts).',
       );
       return;
     }
