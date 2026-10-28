@@ -49,6 +49,38 @@ export async function getUserProfileHandler(
   }
 }
 
+// GET /api/v1/users/:username/followers?cursor=...
+export async function getFollowersHandler(
+  req: Request<{ username: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { sub } = requireUser(req);
+    const { cursor } = req.query as { cursor?: string };
+    const page = await usersService.getFollowers(req.params.username, sub, cursor);
+    res.json(page);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/v1/users/:username/following?cursor=...
+export async function getFollowingHandler(
+  req: Request<{ username: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { sub } = requireUser(req);
+    const { cursor } = req.query as { cursor?: string };
+    const page = await usersService.getFollowing(req.params.username, sub, cursor);
+    res.json(page);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // PATCH /api/v1/users/me
 export async function updateProfileHandler(
   req: Request,

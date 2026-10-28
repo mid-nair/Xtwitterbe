@@ -4,6 +4,8 @@ import { validate } from '@/middleware/validate.middleware';
 import { getUserTweetsHandler } from '@/modules/tweets/tweets.controller';
 import {
   followUserHandler,
+  getFollowersHandler,
+  getFollowingHandler,
   getSuggestionsHandler,
   getUserProfileHandler,
   searchUsersHandler,
@@ -30,6 +32,12 @@ router.patch('/me', validate(updateProfileSchema), updateProfileHandler);
 
 /** GET /api/v1/users/:username/tweets?tab=posts|replies|media|reposts */
 router.get('/:username/tweets', getUserTweetsHandler);
+
+/** GET /api/v1/users/:username/followers?cursor= — people who follow this user. */
+router.get('/:username/followers', getFollowersHandler);
+
+/** GET /api/v1/users/:username/following?cursor= — people this user follows. */
+router.get('/:username/following', getFollowingHandler);
 
 /** GET /api/v1/users/:username — full profile with counts and follow status. */
 router.get('/:username', getUserProfileHandler);

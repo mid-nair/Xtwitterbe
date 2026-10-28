@@ -1,7 +1,8 @@
-import type { User } from '@prisma/client';
+import type { Prisma, User } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/shared/errors/AppError';
-import { SUGGESTIONS_LIMIT } from '@/config/constants';
+import { isObjectId } from '@/shared/utils/objectId';
+import { FEED_PAGE_SIZE, SUGGESTIONS_LIMIT } from '@/config/constants';
 import { createNotification, removeNotification } from '@/modules/notifications/notifications.service';
 import type { UpdateProfileDto } from './users.dto';
 
@@ -122,6 +123,78 @@ export async function searchUsers(query: string, viewerId: string) {
   }));
 }
 
+// ─── Followers / Following lists ─────────────────────────────────────────────
+
+const connectionUserSelect = {
+  id: true,
+  username: true,
+  display_name: true,
+  bio: true,
+  avatar_url: true,
+  is_verified: true,
+} satisfies Prisma.UserSelect;
+
+export type ConnectionKind = 'followers' | 'following';
+
+/**
+ * Paginated list of the people who follow `username` (kind = "followers")
+ * or whom `username` follows (kind = "following"). Each entry carries
+ * `is_following` relative to the viewer so the client can render Follow buttons.
+ * Pagination is by Follow row id, newest first.
+ */
+export async function getConnections(
+  kind: ConnectionKind,
+  username: string,
+  viewerId: string,
+  cursor?: string,
+) {
+  const limit = FEED_PAGE_SIZE;
+  if (cursor && !isObjectId(cursor)) throw AppError.badRequest('Invalid cursor.');
+
+  const owner = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+  if (!owner) throw AppError.notFound('User not found.');
+
+  const rows = await prisma.follow.findMany({
+    where: {
+      ...(kind === 'followers' ? { following_id: owner.id } : { follower_id: owner.id }),
+      ...(cursor ? { id: { lt: cursor } } : {}),
+    },
+    orderBy: { id: 'desc' },
+    take: limit,
+    include: {
+      follower: { select: connectionUserSelect },
+      following: { select: connectionUserSelect },
+    },
+  });
+
+  const users = rows.map((row) => (kind === 'followers' ? row.follower : row.following));
+
+  const viewerFollows = await prisma.follow.findMany({
+    where: { follower_id: viewerId, following_id: { in: users.map((u) => u.id) } },
+    select: { following_id: true },
+  });
+  const viewerFollowingIds = new Set(viewerFollows.map((f) => f.following_id));
+
+  return {
+    data: users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      display_name: u.display_name,
+      bio: u.bio,
+      avatar_url: u.avatar_url,
+      is_verified: u.is_verified,
+      is_following: viewerFollowingIds.has(u.id),
+    })),
+    next_cursor: rows.length === limit ? rows[rows.length - 1].id : null,
+  };
+}
+
+export const getFollowers = (username: string, viewerId: string, cursor?: string) =>
+  getConnections('followers', username, viewerId, cursor);
+
+export const getFollowing = (username: string, viewerId: string, cursor?: string) =>
+  getConnections('following', username, viewerId, cursor);
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function updateProfile(userId: string, dto: UpdateProfileDto) {
@@ -141,6 +214,7 @@ export async function updateProfile(userId: string, dto: UpdateProfileDto) {
 }
 
 export async function followUser(followerId: string, targetUserId: string): Promise<void> {
+  if (!isObjectId(targetUserId)) throw AppError.notFound('User not found.');
   if (followerId === targetUserId) {
     throw AppError.badRequest('You cannot follow yourself.');
   }
@@ -168,6 +242,8 @@ export async function followUser(followerId: string, targetUserId: string): Prom
 }
 
 export async function unfollowUser(followerId: string, targetUserId: string): Promise<void> {
+  if (!isObjectId(targetUserId)) throw AppError.notFound('User not found.');
+
   await prisma.follow.deleteMany({
     where: { follower_id: followerId, following_id: targetUserId },
   });

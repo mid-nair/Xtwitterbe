@@ -34,10 +34,15 @@ export function errorHandler(
   }
 
   if (err instanceof multer.MulterError) {
+    const isVideo = err.field === 'video';
     const message =
       err.code === 'LIMIT_FILE_SIZE'
-        ? 'Image must be 5MB or smaller.'
-        : 'Image upload failed.';
+        ? isVideo
+          ? 'Video must be 50MB or smaller.'
+          : 'Image must be 5MB or smaller.'
+        : isVideo
+          ? 'Video upload failed.'
+          : 'Image upload failed.';
     res.status(400).json({ message });
     return;
   }

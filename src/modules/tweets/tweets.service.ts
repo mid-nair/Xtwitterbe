@@ -1,6 +1,7 @@
 import { prisma } from '@/config/database';
 import { AppError } from '@/shared/errors/AppError';
 import { paginate } from '@/shared/utils/pagination';
+import { isObjectId } from '@/shared/utils/objectId';
 import { topLevelTweetWhere } from '@/shared/utils/tweetFilters';
 import { FEED_PAGE_SIZE } from '@/config/constants';
 import { createNotification, removeNotification } from '@/modules/notifications/notifications.service';
@@ -15,6 +16,16 @@ import type { CreateTweetDto } from './tweets.dto';
 export type ProfileTweetTab = 'posts' | 'replies' | 'media' | 'reposts';
 
 const MENTION_RE = /@([A-Za-z0-9_]{1,15})/g;
+
+const VIDEO_EXTENSION_RE = /\.(mp4|webm|mov|m4v)(?:$|[?#])/i;
+
+/**
+ * Decide whether an uploaded media URL is a video or an image.
+ * Cloudinary video URLs contain `/video/upload/`; direct links are matched by extension.
+ */
+function inferMediaType(url: string): 'image' | 'video' {
+  return url.includes('/video/upload/') || VIDEO_EXTENSION_RE.test(url) ? 'video' : 'image';
+}
 
 async function notifyMentions(
   content: string,
@@ -63,7 +74,7 @@ export async function createTweet(dto: CreateTweetDto, authorId: string) {
       reply_to_tweet_id: dto.reply_to_tweet_id,
       quote_tweet_id: dto.quote_tweet_id,
       media: {
-        create: dto.media_urls.map((url) => ({ url })),
+        create: dto.media_urls.map((url) => ({ url, media_type: inferMediaType(url) })),
       },
     },
     include: tweetInclude(authorId),
@@ -91,6 +102,8 @@ export async function createTweet(dto: CreateTweetDto, authorId: string) {
 // ─── Detail & replies ────────────────────────────────────────────────────────
 
 export async function getTweetDetail(tweetId: string, viewerId: string) {
+  if (!isObjectId(tweetId)) throw AppError.notFound('Tweet not found.');
+
   const tweet = await prisma.tweet.findUnique({
     where: { id: tweetId },
     include: tweetInclude(viewerId),
@@ -100,9 +113,9 @@ export async function getTweetDetail(tweetId: string, viewerId: string) {
 
   const parent = tweet.reply_to_tweet_id
     ? await prisma.tweet.findUnique({
-        where: { id: tweet.reply_to_tweet_id },
-        include: tweetInclude(viewerId),
-      })
+      where: { id: tweet.reply_to_tweet_id },
+      include: tweetInclude(viewerId),
+    })
     : null;
 
   return {
@@ -117,6 +130,8 @@ export async function getTweetDetail(tweetId: string, viewerId: string) {
  */
 export async function getTweetReplies(tweetId: string, viewerId: string, cursor?: string) {
   const limit = FEED_PAGE_SIZE;
+  if (!isObjectId(tweetId)) throw AppError.notFound('Tweet not found.');
+  if (cursor && !isObjectId(cursor)) throw AppError.badRequest('Invalid cursor.');
 
   const replies = await prisma.tweet.findMany({
     where: {
@@ -142,6 +157,8 @@ export async function engageTweet(
   action: string,
   userId: string,
 ): Promise<void> {
+  if (!isObjectId(tweetId)) throw AppError.notFound('Tweet not found.');
+
   const tweet = await prisma.tweet.findUnique({ where: { id: tweetId } });
   if (!tweet) throw AppError.notFound('Tweet not found.');
 
