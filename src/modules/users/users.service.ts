@@ -154,6 +154,9 @@ export async function getConnections(
   const owner = await prisma.user.findUnique({ where: { username }, select: { id: true } });
   if (!owner) throw AppError.notFound('User not found.');
 
+  // Load only the Follow rows first, then the users separately. A Follow row can
+  // point at a user who no longer exists (relations use onDelete: NoAction), and
+  // including the relation would make Prisma throw on such an orphan row.
   const rows = await prisma.follow.findMany({
     where: {
       ...(kind === 'followers' ? { following_id: owner.id } : { follower_id: owner.id }),
@@ -161,22 +164,29 @@ export async function getConnections(
     },
     orderBy: { id: 'desc' },
     take: limit,
-    include: {
-      follower: { select: connectionUserSelect },
-      following: { select: connectionUserSelect },
-    },
+    select: { id: true, follower_id: true, following_id: true },
   });
 
-  const users = rows.map((row) => (kind === 'followers' ? row.follower : row.following));
+  const userIds = rows.map((row) => (kind === 'followers' ? row.follower_id : row.following_id));
 
-  const viewerFollows = await prisma.follow.findMany({
-    where: { follower_id: viewerId, following_id: { in: users.map((u) => u.id) } },
-    select: { following_id: true },
-  });
+  const [users, viewerFollows] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: connectionUserSelect,
+    }),
+    prisma.follow.findMany({
+      where: { follower_id: viewerId, following_id: { in: userIds } },
+      select: { following_id: true },
+    }),
+  ]);
+
+  const usersById = new Map(users.map((u) => [u.id, u]));
   const viewerFollowingIds = new Set(viewerFollows.map((f) => f.following_id));
 
-  return {
-    data: users.map((u) => ({
+  const data = userIds
+    .map((id) => usersById.get(id))
+    .filter((u): u is NonNullable<typeof u> => u !== undefined) // skip deleted users
+    .map((u) => ({
       id: u.id,
       username: u.username,
       display_name: u.display_name,
@@ -184,7 +194,11 @@ export async function getConnections(
       avatar_url: u.avatar_url,
       is_verified: u.is_verified,
       is_following: viewerFollowingIds.has(u.id),
-    })),
+    }));
+
+  return {
+    data,
+    // The cursor comes from the Follow rows (not the users) so skipped orphans never stall paging.
     next_cursor: rows.length === limit ? rows[rows.length - 1].id : null,
   };
 }
