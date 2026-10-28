@@ -197,7 +197,7 @@ function checkMediaFiles(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing media files in prisma/birthday-media/: ${missing.join(', ')}\n` +
-        'Unzip birthday-media.zip into prisma/birthday-media/ and try again.',
+      'Unzip birthday-media.zip into prisma/birthday-media/ and try again.',
     );
   }
 }
@@ -866,9 +866,20 @@ async function cleanup(ids: string[]): Promise<void> {
   await prisma.bookmark.deleteMany({ where: { OR: [{ user_id: { in: ids } }, { tweet_id: { in: tweetIds } }] } });
   await prisma.tweetMedia.deleteMany({ where: { tweet_id: { in: tweetIds } } });
 
-  // Deepest replies first (the self-relation blocks deleting a parent first).
-  for (const level of [...levels].reverse()) {
-    await prisma.tweet.deleteMany({ where: { id: { in: level } } });
+  // The self-relation blocks deleting a tweet that still has replies, so delete in rounds:
+  // each round removes only tweets that no remaining tweet replies to (leaves first).
+  const rows = await prisma.tweet.findMany({
+    where: { id: { in: tweetIds } },
+    select: { id: true, reply_to_tweet_id: true },
+  });
+  let remaining = new Map<string, string | null>(rows.map((row) => [row.id, row.reply_to_tweet_id]));
+  while (remaining.size > 0) {
+    const parents = new Set<string>();
+    for (const parentId of remaining.values()) if (parentId) parents.add(parentId);
+    const leaves = [...remaining.keys()].filter((id) => !parents.has(id));
+    if (leaves.length === 0) throw new Error('Could not order tweets for deletion (reply cycle).');
+    await prisma.tweet.deleteMany({ where: { id: { in: leaves } } });
+    leaves.forEach((id) => remaining.delete(id));
   }
 
   await prisma.follow.deleteMany({
@@ -896,7 +907,7 @@ async function main(): Promise<void> {
     if (herTweets > 0 && !FORCE) {
       console.log(
         `@${HER.username} already has ${herTweets} posts, so the birthday content looks seeded already.\n` +
-          'Run with --force to rebuild it (this only removes content owned by the birthday accounts).',
+        'Run with --force to rebuild it (this only removes content owned by the birthday accounts).',
       );
       return;
     }
@@ -1090,6 +1101,14 @@ async function main(): Promise<void> {
       update: { category: trend.category, post_count: trend.post_count },
       create: trend,
     });
+  }
+
+  console.log('Checking the friends\' letters...');
+  for (const letter of loadLetters()) {
+    const count = await prisma.tweet.count({
+      where: { author_id: users[letter.username], reply_to_tweet_id: null, content: letter.text },
+    });
+    console.log(`  @${letter.username}: ${count === 1 ? 'letter saved ✔' : `PROBLEM, found ${count} copies`}`);
   }
 
   console.log('\nBirthday seed complete! 🎂');
